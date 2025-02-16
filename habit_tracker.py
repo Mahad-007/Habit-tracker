@@ -2,15 +2,17 @@ import chromadb
 import smtplib
 import datetime
 import openai
+import os
+from dotenv import load_dotenv
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # Initialize ChromaDB
 db = chromadb.PersistentClient(path="habit_tracker_db")
 collection = db.get_or_create_collection("habits")
-
+load_dotenv()
 # OpenAI API Key
-openai.api_key = "your-api-key"
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Function to log a habit
 def log_habit():
@@ -62,8 +64,8 @@ def analyze_habits():
 
 # Function to send reminder emails
 def send_email(recipient, subject, body):
-    sender_email = "your-email@gmail.com"  # Replace with an email service API or system
-    sender_password = "your-app-password"  # Secure method should be used for password storage
+    sender_email = os.getenv("EMAIL_USER") # Replace with an email service API or system
+    sender_password = os.getenv("EMAIL_PASSWORD") # Secure method should be used for password storage
     
     msg = MIMEMultipart()
     msg["From"] = sender_email
