@@ -11,9 +11,13 @@ collection = db.get_or_create_collection("habits")
 # Function to log a habit
 def log_habit():
     user_email = input("Enter your email: ").strip().lower()
-    habit_type = input("Enter the habit type (e.g., workout, reading, meditation): ").strip().lower()
+    habit_type = input("Enter the habit type (e.g., workout, reading, meditation, hydration): ").strip().lower()
+    duration = input("Enter duration (in minutes): ").strip()
+    intensity = input("Enter intensity (low, medium, high): ").strip().lower()
+    mood = input("How did you feel after this habit? (happy, neutral, tired): ").strip().lower()
     timestamp = str(datetime.datetime.now())
     completion_status = input("Did you complete this habit? (yes/no): ").strip().lower()
+    reminder_interval = input("Set reminder interval (daily, weekly, custom): ").strip().lower()
     
     collection.add(
         ids=[timestamp],
@@ -21,7 +25,11 @@ def log_habit():
             "type": habit_type,
             "timestamp": timestamp,
             "email": user_email,
-            "completed": completion_status
+            "completed": completion_status,
+            "duration": duration,
+            "intensity": intensity,
+            "mood": mood,
+            "reminder_interval": reminder_interval
         }]
     )
     print("✅ Habit logged successfully!")
@@ -29,6 +37,8 @@ def log_habit():
 # Function to analyze habit trends
 def analyze_habits():
     user_email = input("Enter your email to view habit trends: ").strip().lower()
+    habit_category = input("Filter by category (fitness, study, sleep, all): ").strip().lower()
+    
     results = collection.query(
         query_texts=[user_email],
         n_results=10  # Get latest 10 habit entries
@@ -38,16 +48,18 @@ def analyze_habits():
         print("❌ No habits found for this email.")
         return
     
-    completed_habits = sum(1 for doc in results["documents"] if doc["completed"] == "yes")
-    total_habits = len(results["documents"])
+    filtered_habits = [doc for doc in results["documents"] if habit_category == "all" or doc["type"] == habit_category]
+    
+    completed_habits = sum(1 for doc in filtered_habits if doc["completed"] == "yes")
+    total_habits = len(filtered_habits)
     success_rate = (completed_habits / total_habits) * 100 if total_habits else 0
     
     print(f"📊 Habit Success Rate: {success_rate:.2f}%")
 
 # Function to send reminder emails
 def send_email(recipient, subject, body):
-    sender_email = "your-email@gmail.com"  # Replace with your email
-    sender_password = "your-password"  # Replace with an app password or use an email API
+    sender_email = "your-email@gmail.com"  # Replace with an email service API or system
+    sender_password = "your-app-password"  # Secure method should be used for password storage
     
     msg = MIMEMultipart()
     msg["From"] = sender_email
@@ -81,9 +93,12 @@ def smart_reminder():
         habit_type = doc["type"]
         completed = doc["completed"]
         timestamp = datetime.datetime.strptime(doc["timestamp"], "%Y-%m-%d %H:%M:%S.%f")
+        reminder_interval = doc.get("reminder_interval", "daily")
         
-        if completed == "no" and (datetime.datetime.now() - timestamp).days >= 2:
-            reminder_msg = f"Hey! You haven't completed your {habit_type} habit in 2+ days. Stay consistent! 💪"
+        days_since_last = (datetime.datetime.now() - timestamp).days
+        if completed == "no" and ((reminder_interval == "daily" and days_since_last >= 1) or 
+                                   (reminder_interval == "weekly" and days_since_last >= 7)):
+            reminder_msg = f"Hey! You haven't completed your {habit_type} habit. Stay consistent! 💪"
             send_email(user_email, "Habit Reminder", reminder_msg)
 
 # Main menu
