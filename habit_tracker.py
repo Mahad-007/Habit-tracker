@@ -1,12 +1,16 @@
 import chromadb
 import smtplib
 import datetime
+import openai
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # Initialize ChromaDB
 db = chromadb.PersistentClient(path="habit_tracker_db")
 collection = db.get_or_create_collection("habits")
+
+# OpenAI API Key
+openai.api_key = "your-api-key"
 
 # Function to log a habit
 def log_habit():
@@ -101,6 +105,17 @@ def smart_reminder():
             reminder_msg = f"Hey! You haven't completed your {habit_type} habit. Stay consistent! 💪"
             send_email(user_email, "Habit Reminder", reminder_msg)
 
+# AI-Powered Habit Scheduling Suggestions
+def adaptive_planning():
+    query = input("Ask AI to optimize your schedule (e.g., 'When should I workout?'): ").strip()
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": query}]
+    )
+    
+    print("\n🧠 AI Suggestion:")
+    print(response["choices"][0]["message"]["content"])
+
 # Main menu
 def main():
     while True:
@@ -108,9 +123,10 @@ def main():
         print("1️⃣ Log a Habit")
         print("2️⃣ Analyze Habit Trends")
         print("3️⃣ Smart Reminders (via Email)")
-        print("4️⃣ Exit")
+        print("4️⃣ Adaptive Planning (AI Suggestions)")
+        print("5️⃣ Exit")
         
-        choice = input("Select an option (1-4): ").strip()
+        choice = input("Select an option (1-5): ").strip()
         
         if choice == "1":
             log_habit()
@@ -119,6 +135,8 @@ def main():
         elif choice == "3":
             smart_reminder()
         elif choice == "4":
+            adaptive_planning()
+        elif choice == "5":
             print("👋 Goodbye!")
             break
         else:
