@@ -1,145 +1,113 @@
 import chromadb
-import openai
-from datetime import datetime, timedelta
-import json
+import smtplib
+import datetime
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-# 🔹 Initialize ChromaDB (Persistent Storage)
-chroma_client = chromadb.PersistentClient(path="./habit_tracker_db")
-habit_collection = chroma_client.get_or_create_collection(name="habits")
+# Initialize ChromaDB
+db = chromadb.PersistentClient(path="habit_tracker_db")
+collection = db.get_or_create_collection("habits")
 
-# 🔹 OpenAI API for AI Insights (Set your API key)
-openai.api_key = "your-api-key"
-
-# Function to get embeddings for AI-based retrieval
-def get_embedding(text):
-    response = openai.Embedding.create(input=text, model="text-embedding-ada-002")
-    return response['data'][0]['embedding']
-
-# 🔹 Function to Log a New Habit Entry
+# Function to log a habit
 def log_habit():
-    habit_type = input("Enter habit type (fitness/study/sleep): ").strip().lower()
-    description = input("Describe your habit: ").strip()
-    timestamp = datetime.now().isoformat()
-
-    habit_id = f"habit-{int(datetime.now().timestamp())}"
-
-    # Add entry to ChromaDB
-    habit_collection.add(
-        ids=[habit_id],
-        documents=[description],
+    user_email = input("Enter your email: ").strip().lower()
+    habit_type = input("Enter the habit type (e.g., workout, reading, meditation): ").strip().lower()
+    timestamp = str(datetime.datetime.now())
+    completion_status = input("Did you complete this habit? (yes/no): ").strip().lower()
+    
+    collection.add(
+        ids=[timestamp],
         metadatas=[{
             "type": habit_type,
-            "timestamp": timestamp
-        }],
-        embeddings=[get_embedding(description)]  # Store embeddings for AI-based retrieval
+            "timestamp": timestamp,
+            "email": user_email,
+            "completed": completion_status
+        }]
     )
+    print("✅ Habit logged successfully!")
 
-    print("\n✅ Habit logged successfully!")
-
-# 🔹 Function to Retrieve Past Habits
-def retrieve_habits():
-    query = input("Search your past habits: ").strip()
+# Function to analyze habit trends
+def analyze_habits():
+    user_email = input("Enter your email to view habit trends: ").strip().lower()
+    results = collection.query(
+        query_texts=[user_email],
+        n_results=10  # Get latest 10 habit entries
+    )
     
-    results = habit_collection.query(
-        query_texts=[query],
-        n_results=3
-    )
+    if not results["documents"]:
+        print("❌ No habits found for this email.")
+        return
+    
+    completed_habits = sum(1 for doc in results["documents"] if doc["completed"] == "yes")
+    total_habits = len(results["documents"])
+    success_rate = (completed_habits / total_habits) * 100 if total_habits else 0
+    
+    print(f"📊 Habit Success Rate: {success_rate:.2f}%")
 
-    if results["documents"]:
-        print("\n📌 Past Habit Logs:")
-        for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
-            print(f"🔹 {doc} | Date: {meta['timestamp']}")
-    else:
-        print("\n❌ No matching habits found.")
+# Function to send reminder emails
+def send_email(recipient, subject, body):
+    sender_email = "your-email@gmail.com"  # Replace with your email
+    sender_password = "your-password"  # Replace with an app password or use an email API
+    
+    msg = MIMEMultipart()
+    msg["From"] = sender_email
+    msg["To"] = recipient
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+    
+    try:
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, recipient, msg.as_string())
+        server.quit()
+        print("✅ Reminder sent successfully!")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
 
-# 🔹 AI-Powered Smart Reminders
+# Function to send smart reminders
 def smart_reminder():
-    reminder_type = input("What reminder do you need? (fitness/study/sleep): ").strip().lower()
-
-    # Query past data for insights
-    results = habit_collection.query(
-        query_texts=[f"past {reminder_type} habits"],
-        n_results=5
-    )
-
-    if results["documents"]:
-        latest_entry = results["metadatas"][0][0]
-        last_logged_date = datetime.fromisoformat(latest_entry["timestamp"])
-
-        # AI-Generated Reminder Logic
-        if datetime.now() - last_logged_date > timedelta(days=2):
-            print(f"\n🚀 You haven't logged a {reminder_type} habit in 2+ days. Time to get back on track!")
-        else:
-            print(f"\n✅ Great job! You last logged this habit on {latest_entry['timestamp']}. Keep it up!")
-    else:
-        print("\n❌ No data found for this habit. Start logging now!")
-
-# 🔹 Performance Tracking & Insights
-def analyze_performance():
-    habit_type = input("Analyze which habit? (fitness/study/sleep): ").strip().lower()
-
-    results = habit_collection.query(
-        query_texts=[f"past {habit_type} habits"],
+    user_email = input("Enter your email to check for reminders: ").strip().lower()
+    results = collection.query(
+        query_texts=[user_email],
         n_results=10
     )
+    
+    if not results["documents"]:
+        print("❌ No habit data found.")
+        return
+    
+    for doc in results["documents"]:
+        habit_type = doc["type"]
+        completed = doc["completed"]
+        timestamp = datetime.datetime.strptime(doc["timestamp"], "%Y-%m-%d %H:%M:%S.%f")
+        
+        if completed == "no" and (datetime.datetime.now() - timestamp).days >= 2:
+            reminder_msg = f"Hey! You haven't completed your {habit_type} habit in 2+ days. Stay consistent! 💪"
+            send_email(user_email, "Habit Reminder", reminder_msg)
 
-    if results["documents"]:
-        total_entries = len(results["documents"][0])
-        print(f"\n📊 You've logged {total_entries} {habit_type} habits recently.")
-
-        # Generate AI insights
-        ai_input = f"Analyze my past {habit_type} habits and provide improvement suggestions."
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": ai_input}]
-        )
-
-        print("\n🔍 AI Analysis & Suggestions:")
-        print(response["choices"][0]["message"]["content"])
-    else:
-        print("\n❌ No habit data found.")
-
-# 🔹 Adaptive Planning: AI-Driven Habit Optimization
-def adaptive_planning():
-    query = input("Ask AI to optimize your schedule (e.g., 'When should I workout?'): ").strip()
-
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": query}]
-    )
-
-    print("\n🧠 AI Suggestion:")
-    print(response["choices"][0]["message"]["content"])
-
-# 🔹 Main Menu
+# Main menu
 def main():
     while True:
-        print("\n📅 Habit Tracker - Main Menu")
+        print("\n🚀 Habit Tracker Menu:")
         print("1️⃣ Log a Habit")
-        print("2️⃣ Retrieve Past Habits")
-        print("3️⃣ Smart Reminders")
-        print("4️⃣ Analyze Performance")
-        print("5️⃣ Adaptive Planning (AI Suggestions)")
-        print("6️⃣ Exit")
-
-        choice = input("\nEnter your choice (1-6): ").strip()
-
+        print("2️⃣ Analyze Habit Trends")
+        print("3️⃣ Smart Reminders (via Email)")
+        print("4️⃣ Exit")
+        
+        choice = input("Select an option (1-4): ").strip()
+        
         if choice == "1":
             log_habit()
         elif choice == "2":
-            retrieve_habits()
+            analyze_habits()
         elif choice == "3":
             smart_reminder()
         elif choice == "4":
-            analyze_performance()
-        elif choice == "5":
-            adaptive_planning()
-        elif choice == "6":
-            print("\n👋 Exiting Habit Tracker. Stay disciplined!")
+            print("👋 Goodbye!")
             break
         else:
-            print("\n❌ Invalid choice. Please select a valid option.")
+            print("❌ Invalid option, try again.")
 
-# Run the Habit Tracker
 if __name__ == "__main__":
     main()
