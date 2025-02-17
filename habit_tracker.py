@@ -2,6 +2,7 @@ import chromadb
 import smtplib
 import datetime
 import openai
+from openai import OpenAI  
 import os
 from dotenv import load_dotenv
 from email.mime.text import MIMEText
@@ -93,31 +94,31 @@ def send_email(recipient, subject, body):
 # Function to send smart reminders
 def smart_reminder():
     user_email = input("Enter your email to check for reminders: ").strip().lower()
+
+    # Retrieve habits for the user
     results = collection.query(
         query_texts=[user_email],
-        n_results=10
+        n_results=10  # Adjusts if fewer elements exist
     )
-    
-    if not results["documents"]:
-        print("❌ No habit data found.")
-        return
-    
-    for doc in results["documents"]:
-        habit_type = doc["type"]
-        completed = doc["completed"]
-        timestamp = datetime.datetime.strptime(doc["timestamp"], "%Y-%m-%d %H:%M:%S.%f")
-        reminder_interval = doc.get("reminder_interval", "daily")
-        
-        days_since_last = (datetime.datetime.now() - timestamp).days
-        if completed == "no" and ((reminder_interval == "daily" and days_since_last >= 1) or 
-                                   (reminder_interval == "weekly" and days_since_last >= 7)):
-            reminder_msg = f"Hey! You haven't completed your {habit_type} habit. Stay consistent! 💪"
-            send_email(user_email, "Habit Reminder", reminder_msg)
+
+    # Extract habits safely
+    if "metadatas" in results and results["metadatas"]:
+        for metadata in results["metadatas"][0]:  # First entry in the list
+            habit_type = metadata.get("type", "Unknown")
+            reminder_interval = metadata.get("reminder_interval", "Unknown")
+
+            print(f"⏰ Reminder: Don't forget your {habit_type} habit! Interval: {reminder_interval}")
+
+    else:
+        print("⚠️ No reminders found.")
+
 
 # AI-Powered Habit Scheduling Suggestions
 def adaptive_planning():
     query = input("Ask AI to optimize your schedule (e.g., 'When should I workout?'): ").strip()
-    response = openai.ChatCompletion.create(
+    client = OpenAI()  # Create a client instance
+
+    response = client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": query}]
     )
