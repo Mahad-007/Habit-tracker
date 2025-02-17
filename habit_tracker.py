@@ -15,6 +15,7 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Function to log a habit
+# Function to log a habit
 def log_habit():
     user_email = input("Enter your email: ").strip().lower()
     habit_type = input("Enter the habit type (e.g., workout, reading, meditation, hydration): ").strip().lower()
@@ -25,6 +26,10 @@ def log_habit():
     completion_status = input("Did you complete this habit? (yes/no): ").strip().lower()
     reminder_interval = input("Set reminder interval (daily, weekly, custom): ").strip().lower()
     
+    # Convert habit data into a text description for ChromaDB
+    habit_description = f"User {user_email} logged a {habit_type} habit. Duration: {duration} minutes, Intensity: {intensity}, Mood: {mood}, Completed: {completion_status}, Reminder: {reminder_interval}."
+
+    # Add the habit data to ChromaDB with 'documents' field
     collection.add(
         ids=[timestamp],
         metadatas=[{
@@ -36,8 +41,10 @@ def log_habit():
             "intensity": intensity,
             "mood": mood,
             "reminder_interval": reminder_interval
-        }]
+        }],
+        documents=[habit_description]  # Required field to avoid error
     )
+
     print("✅ Habit logged successfully!")
 
 # Function to analyze habit trends
